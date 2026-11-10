@@ -11,7 +11,7 @@ function validTricLink(raw){
   try{
     const u=new URL(raw);
     if(u.protocol!=='https:'||u.hostname!=='script.google.com')return null;
-    if(!/^\/macros\/s\/[^/]+\/exec\/?$/.test(u.pathname))return null;
+    if(!/^(?:\/a\/rmutsv\.ac\.th)?\/macros\/s\/[^/]+\/exec\/?$/.test(u.pathname))return null;
     if(!/^TRICQR1:QR-[a-f0-9]{20}:[a-f0-9]{64}$/.test(u.searchParams.get('qr')||''))return null;
     return u.href;
   }catch(_){return null;}
