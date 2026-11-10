@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>TRIC QR Scanner</title>
+<style>body{margin:0;background:#f5f7f5;color:#19332b;font-family:system-ui,-apple-system,sans-serif}main{max-width:520px;margin:20px auto;padding:18px}h1{color:#064e3b}section{background:#fff;border-radius:20px;padding:20px;box-shadow:0 12px 35px #064e3b12}video{width:100%;background:#10291f;border-radius:14px;max-height:65vh}button{background:#064e3b;color:white;border:0;border-radius:10px;padding:14px 18px;font-size:17px;width:100%;margin-top:12px}#status{padding:12px;background:#edf4ef;border-radius:10px;overflow-wrap:anywhere}.hint{color:#627a6e;font-size:14px}</style>
+</head><body><main><section><h1>TRIC · QR Scanner</h1><p class="hint">สแกน QR ของสมาชิกเพื่อเปิดหน้ารับฝากใน TRIC</p><video id="camera" autoplay playsinline muted></video><p id="status" role="status">กดปุ่มเพื่อเปิดกล้อง</p><button id="start" type="button">เปิดกล้องสแกน QR</button><p class="hint">เมื่อสแกนสำเร็จ ระบบจะเปิดลิงก์ TRIC จาก QR โดยตรง อาจต้องเข้าสู่ระบบ Admin อีกครั้งหากเซสชันไม่ได้ถูกแชร์ระหว่างแท็บ</p></section></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+'use strict';
+const video=document.getElementById('camera'), statusEl=document.getElementById('status'), btn=document.getElementById('start');
+let stream=null, busy=false, done=false, detector=null, timer=null;
+function validTricLink(raw){
+  try{
+    const u=new URL(raw);
+    if(u.protocol!=='https:'||u.hostname!=='script.google.com')return null;
+    if(!/^\/macros\/s\/[^/]+\/exec\/?$/.test(u.pathname))return null;
+    if(!/^TRICQR1:QR-[a-f0-9]{20}:[a-f0-9]{64}$/.test(u.searchParams.get('qr')||''))return null;
+    return u.href;
+  }catch(_){return null;}
+}
+function finish(raw){
+  const target=validTricLink(raw);
+  if(!target){statusEl.textContent='อ่าน QR ได้ แต่ไม่ใช่ลิงก์รับฝาก TRIC ที่ถูกต้อง';return;}
+  if(done)return;done=true;
+  if(timer)clearInterval(timer);
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  statusEl.textContent='สแกนสำเร็จ กำลังเปิด TRIC...';
+  location.assign(target);
+}
+async function scanFrame(){
+ if(done||busy||!stream||video.readyState<2)return;
+ busy=true;
+ try{
+   if(detector){const codes=await detector.detect(video);if(codes.length){finish(codes[0].rawValue);return;}}
+   else if(typeof jsQR==='function'){
+     const canvas=document.createElement('canvas');canvas.width=Math.min(720,video.videoWidth);canvas.height=Math.round(video.videoHeight*canvas.width/video.videoWidth);
+     const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(video,0,0,canvas.width,canvas.height);
+     const p=ctx.getImageData(0,0,canvas.width,canvas.height);const qr=jsQR(p.data,canvas.width,canvas.height,{inversionAttempts:'dontInvert'});
+     if(qr)finish(qr.data);
+   }
+ }catch(e){statusEl.textContent='ไม่สามารถอ่านภาพกล้อง: '+(e.message||e);}
+ finally{busy=false;}
+}
+async function start(){
+ btn.disabled=true;statusEl.textContent='กำลังขออนุญาตใช้กล้อง...';
+ try{
+   if(!navigator.mediaDevices?.getUserMedia)throw new Error('เบราว์เซอร์ไม่รองรับการเปิดกล้องบนหน้านี้');
+   if('BarcodeDetector' in window){try{detector=new BarcodeDetector({formats:['qr_code']});}catch(_){detector=null;}}
+   if(!detector&&typeof jsQR!=='function')throw new Error('ไม่สามารถโหลดตัวอ่าน QR ได้');
+   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+   video.srcObject=stream;await video.play();statusEl.textContent='เล็งกล้องไปที่ QR ของสมาชิก';
+   timer=setInterval(scanFrame,180);
+ }catch(e){statusEl.textContent='เปิดกล้องไม่สำเร็จ: '+(e.message||e);btn.disabled=false;}
+}
+btn.addEventListener('click',start);
+window.addEventListener('pagehide',()=>{if(timer)clearInterval(timer);if(stream)stream.getTracks().forEach(t=>t.stop());});
+</script></body></html>
